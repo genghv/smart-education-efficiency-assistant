@@ -42,6 +42,8 @@ export default function HomePage() {
   const [isRolling, setIsRolling] = useState(false)
   const animationRef = useRef<number | null>(null)
   const hasTriggeredRef = useRef(false) // 用于防止重复触发
+  const isSectionVisibleRef = useRef(false) // 记录区域是否在视口中
+  const hasLeftViewportRef = useRef(false) // 记录是否已经离开过视口
   
   // 生成用户唯一ID，用于区分不同用户
   const [userId] = useState(() => {
@@ -106,8 +108,8 @@ export default function HomePage() {
 
   // 智能倒计时动画函数
   const startCountdownAnimation = () => {
-    // 如果正在播放动画或已经触发过，则不重复触发
-    if (isRolling || hasTriggeredRef.current) {
+    // 如果正在播放动画，则不重复触发
+    if (isRolling) {
       return
     }
     
@@ -153,10 +155,8 @@ export default function HomePage() {
         // 动画结束
         setIsRolling(false)
         
-        // 重置触发状态，允许下次进入时再次触发
-        setTimeout(() => {
-          hasTriggeredRef.current = false
-        }, 1000)
+        // 动画结束后不重置 hasTriggeredRef，只有在离开视口后才重置
+        // 这样可以确保在同一会话中不会重复触发
       }
     }
 
@@ -177,11 +177,24 @@ export default function HomePage() {
           const rect = contactSection.getBoundingClientRect()
           const isVisible = rect.top < window.innerHeight * 0.8 && rect.bottom > window.innerHeight * 0.2
           
-          if (isVisible) {
-            startCountdownAnimation()
+          // 如果区域进入视口
+          if (isVisible && !isSectionVisibleRef.current) {
+            isSectionVisibleRef.current = true
+            
+            // 只有在以下情况才触发动画：
+            // 1. 首次进入（hasTriggeredRef.current 为 false）
+            // 2. 或者已经离开过视口（hasLeftViewportRef.current 为 true）
+            if (!hasTriggeredRef.current || hasLeftViewportRef.current) {
+              startCountdownAnimation()
+            }
+          }
+          // 如果区域离开视口
+          else if (!isVisible && isSectionVisibleRef.current) {
+            isSectionVisibleRef.current = false
+            hasLeftViewportRef.current = true
           }
         }
-      }, 100) // 延迟100ms，避免滚动时频繁触发
+      }, 150) // 增加延迟到150ms，减少敏感度
     }
 
     // 添加滚动监听
@@ -347,6 +360,7 @@ export default function HomePage() {
                 // 重置触发状态，允许再次触发动画
                 setTimeout(() => {
                   hasTriggeredRef.current = false
+                  hasLeftViewportRef.current = true // 确保可以重新触发
                 }, 1000) // 延迟1秒重置，确保滚动完成
               }}
             >
@@ -629,12 +643,14 @@ export default function HomePage() {
                         whileHover={{ scale: 1.08, y: -2 }}
                         whileTap={{ scale: 0.92 }}
                         transition={{ type: "spring", stiffness: 500, damping: 15 }}
+                        className="relative z-10"
                       >
                         <Button
                           size="lg"
-                          className={`text-lg px-10 py-5 transition-all duration-200 shadow-xl hover:shadow-2xl ${isCopied ? 'bg-gray-400 from-gray-400 to-gray-500' : 'bg-gradient-to-r from-green-500 to-green-600 hover:from-green-600 hover:to-green-700'}`}
+                          className={`text-lg px-10 py-5 transition-all duration-200 shadow-xl hover:shadow-2xl relative z-20 ${isCopied ? 'bg-gray-400 from-gray-400 to-gray-500' : 'bg-gradient-to-r from-green-500 to-green-600 hover:from-green-600 hover:to-green-700'}`}
                           onClick={handleCopy}
                           aria-label="复制微信号"
+                          style={{ pointerEvents: 'auto' }}
                         >
                           {isCopied ? (
                             <>
